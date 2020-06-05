@@ -50,7 +50,7 @@ app.config(function ($routeProvider) {
 
             if ($rootScope.loginData() == null) {
                 // no logged user, we should be going to #login
-                if (next.templateUrl != "pages/login.html") {
+                if (next.templateUrl != "Pages/login.html") {
                     // not going to #login, we should redirect now
                     $location.path("/login");
                 }

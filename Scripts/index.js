@@ -11,8 +11,8 @@ app.directive("messages", function () {
 
 app.config(function ($routeProvider) {
     $routeProvider
-        .when("/", { templateUrl: "pages/app.html", controller: "appController" })
-        .when("/login", { templateUrl: "pages/login.html", controller: "loginController" });
+        .when("/", { templateUrl: "Pages/app.html", controller: "appController" })
+        .when("/login", { templateUrl: "Pages/login.html", controller: "loginController" });
 
 })
     .run(function ($rootScope, $location) {

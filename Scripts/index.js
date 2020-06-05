@@ -1,341 +1,372 @@
-﻿//GLOBAL VARIABLES
+﻿// AngularJs Version
+var apiUrl = "http://mynoteapi.mervetutuncu.com/";
+var app = angular.module("myApp", ["ngRoute"]);
 
-//var apiUrl = "https://localhost:44361/";
-var apiUrl = "https://mynoteapi.mervetutuncu.com/";
+app.directive("messages", function () {
+    return {
+        templateUrl: "directives/messages.html"
+    };
 
-var selectedNote = null;
-var selectedLink = null;
+});
 
+app.config(function ($routeProvider) {
+    $routeProvider
+        .when("/", { templateUrl: "pages/app.html", controller: "appController" })
+        .when("/login", { templateUrl: "pages/login.html", controller: "loginController" });
 
-//FUNCTIONS
-function checkLogin() {
-    // todo:sessionstorage ve localstorage da tutulan login bilgilerine bakarak
-    // login olup olmadığına karar ver ve eğer logins uygulamayı aç
-    // login değilse login/register sayfasını göster
-    var loginData = getLoginData();
-
-    //giriş jetonu yok
-    if (!loginData || !loginData.access_token) {
-        showLoginPage();
-        return;
-    }
-    // token'ı geçerli mi?
-    ajax("api/Account/UserInfo", "GET", null,
-        function (data) {
-            showAppPage();
-        },
-        function () {
-            showLoginPage();
-        });
-
-
-    //$.ajax({
-    //    url: apiUrl + "api/Account/UserInfo",
-    //    type: "GET",
-    //    headers: getAuthHeader(),
-    //    success: function (data) {
-    //        showAppPage();
-    //    },
-    //    error: function () {
-    //        showLoginPage();
-    //    }
-    //});
-}
-
-function showLoginPage() {
-    $(".only-logged-in").hide();
-    $(".only-logged-out").show();
-    $(".page").hide();
-    $("#page-login").show();
-}
-
-function showAppPage() {
-    $(".only-logged-in").show();
-    $(".only-logged-out").hide();
-    $(".page").hide();
-
-    //notları getir
-    ajax("api/Notes/List", "GET", null,
-        function (data) {
-
-            $("#notes").html("");
-            for (var i = 0; i < data.length; i++) {
-                addMenuLink(data[i]);
+})
+    .run(function ($rootScope, $location) {
+        //https://stackoverflow.com/questions/26340181/angularjs-copy-common-properties-from-one-object-to-another/26341011#26341011
+        $rootScope.update = function (srcObj, destObj) {
+            for (var key in destObj) {
+                if (destObj.hasOwnProperty(key) && srcObj.hasOwnProperty(key)) {
+                    destObj[key] = srcObj[key];
+                }
             }
-            //sayfa hazır olduğunda göster
-            $("#page-app").show();
-        },
-        function () {
+        }
+
+        $rootScope.loginData = function () {
+            var loginDataJson = localStorage["login"] || sessionStorage["login"];
+            if (!loginDataJson) {
+                return null;
+            }
+
+            try {
+                return JSON.parse(loginDataJson);
+            } catch (e) {
+                return null;
+            }
+        };
+
+        $rootScope.isLoggedIn = function () {
+            if ($rootScope.loginData()) {
+                return true;
+            }
+            return false;
+        };
+
+        // register listener to watch route changes
+        $rootScope.$on("$routeChangeStart", function (event, next, current) {
+
+            if ($rootScope.loginData() == null) {
+                // no logged user, we should be going to #login
+                if (next.templateUrl != "pages/login.html") {
+                    // not going to #login, we should redirect now
+                    $location.path("/login");
+                }
+            }
         });
-
-}
-
-function addMenuLink(note, isActive = false) {
-    var a = $("<a/>")
-        .attr("href", "#")
-        .addClass("list-group-item list-group-item-action show-note")
-        .text(note.Title)
-        .prop("note", note);
-
-    if (isActive) {
-        $(".show-note").removeClass("active");
-        a.addClass("active");
-        selectedLink = a[0]; //string değil element tutuyor tek başına a yazamayız
-        selectedNote = note;
-    }
-
-    $("#notes").prepend(a); //prepend son ekleneni ilk göster
-}
-
-function getAuthHeader() {
-    return { Authorization: "Bearer " + getLoginData().access_token }
-}
-
-function ajax(url, type, data, successFunc, errorFunc) {
-
-    $.ajax({
-        url: apiUrl + url,
-        type: type,
-        data: data,
-        headers: getAuthHeader(),
-        success: successFunc,
-        error: errorFunc
     });
-}
 
-function addNote() {
-    ajax("api/Notes/New/", "POST",
-        { Title: $("#title").val(), Content: $("#content").val() },
-        function (data) {
-            addMenuLink(data, true);
-        },
-        function () {
+app.controller("mainController", function ($scope, $http, $location) {
 
-        }
-    );
-}
+    $scope.isLoading = false;
 
-function updateNote() {
-    ajax("api/Notes/Update/" + selectedNote.Id, "PUT",
-        { Id: selectedNote.Id, Title: $("#title").val(), Content: $("#content").val() },
-        function (data) {
-            selectedLink.note = data;
-            $(selectedLink).text(data.Title);
-        },
-        function () {
+    $scope.showLoading = function () {
+        $scope.isLoading = true;
+    };
 
-        }
-    );
-}
+    $scope.hideLoading = function () {
+        $scope.isLoading = false;
+    };
 
-function getLoginData() {
-    // todo:sessionstorage da, eğer orada bulamadıysan
-    // localstorage da kayıtlı login data yı json'dan object'e dönüştür ve yolla
-    // eğer yoksa null yolla
-    var json = sessionStorage["login"] || localStorage["login"];
 
-    if (json) {
-        try {
-            return JSON.parse(json);
-        }
-        catch (e) {
+    $scope.token = function () {
+        var loginData = $scope.loginData();
+        if (!loginData) {
             return null;
         }
-    }
+        return loginData.access_token;
+    };
 
-    return null;
+    $scope.logout = function () {
 
-}
+        localStorage.removeItem("login");
+        sessionStorage.removeItem("login");
+        $location.path("/login");
+    };
 
-function success(message) {
-    //aktif olanın message classını içeren
-    $(".tab-pane.active .message")
-        .removeClass("alert-danger")
-        .addClass("alert-success")
-        .text(message)
-        .show();
-
-}
-
-function error(modelState) {
-    if (modelState) {
-        var errors = [];
-        for (var prop in modelState) {
-            for (var i = 0; i < modelState[prop].length; i++) {
-                errors.push(modelState[prop][i]);
+    $scope.ajax = function (apiUri, method, data, isAuth, successFunc, errorFunc) {
+        $scope.showLoading();
+        var headers = null;
+        if (isAuth) {
+            headers = { Authorization: "Bearer " + $scope.token() };
+        }
+        $http({
+            url: apiUrl + apiUri,
+            method: method,
+            headers: headers,
+            data: data
+        }).then(
+            function (response) {
+                successFunc(response);
+                $scope.hideLoading();
+            },
+            function (response) {
+                errorFunc(response);
+                $scope.hideLoading();
             }
-        }
-    }
 
-    var ul = $("<ul>");
-    for (var i = 0; i < errors.length; i++) {
-        ul.append($("<li>").text(errors[i]));
-        $(".tab-pane.active .message")
-            .removeClass("alert-success")
-            .addClass("alert-danger")
-            .html(ul)
-            .show();
-    }
-}
+        )
+    };
 
-function errorMessage(message) {
-    if (message) {
-        $(".tab-pane.active .message")
-            .removeClass("alert-success")
-            .addClass("alert-danger")
-            .text(message)
-            .show();
-    }
-}
-
-function resetLoginForms() {
-    $(".message").hide();
-    $("#login form").each(function () {
-        this.reset();
-    });
-}
-
-function resetNoteForm() {
-    selectedLink = null;
-    selectedNote = null;
-    $(".show-note").removeClass("active");
-    $("#title").val("");
-    $("#content").val("");
-}
-
-//EVENTS
-
-$(document).ajaxStart(function () {
-    $(".loading").removeClass("d-none");
-});
-
-$(document).ajaxStop(function () {
-    $(".loading").addClass("d-none");
-});
-
-//register
-$("#signupform").submit(function (event) {
-    event.preventDefault();
-    var formdata = $(this).serialize();
-
-    $.post(apiUrl + "api/Account/Register", formdata, function (data) {
-        resetLoginForms();
-        success("Your account has been succesfully created. ");
-
-    }).fail(function (xhr) {
-        error(xhr.responseJSON.ModelState);
-
-    });
-});
-
-//login
-$("#signinform").submit(function (event) {
-    event.preventDefault();
-    var formdata = $(this).serialize();
-
-    $.post(apiUrl + "Token", formdata, function (data) {
-
-
-        var datastr = JSON.stringify(data);
-        if ($("#signinrememberme").prop("checked")) {
-            sessionStorage.removeItem("login");
-            localStorage["login"] = datastr;
-        } else {
-            localStorage.removeItem("login");
-            sessionStorage["login"] = datastr;
-        }
-        resetLoginForms();
-        success("You have been logged in successfully. Redirecting..");
-
-        setTimeout(function () {
-            resetLoginForms();
-            showAppPage();
-        }, 1000);
-
-    }).fail(function (xhr) {
-        errorMessage(xhr.responseJSON.error_description);
-
-    });
-});
-
-// https://getbootstrap.com/docs/4.0/components/navs/#events
-$('#login a[data-toggle="pill"]').on('shown.bs.tab', function (e) {
-    // e.target // newly activated tab
-    // e.relatedTarget // previous active tab
-    resetLoginForms();
-
-});
-
-//https://getbootstrap.com/docs/4.0/components/navs/#via-javascript
-
-$(".navbar-login a").click(function (event) {
-    event.preventDefault();
-    var href = $(this).attr("href");
-    $('#pills-tab a[href="' + href + '"]').tab('show') // Select tab by name
-
-});
-
-//logout
-$("#btnLogout").click(function (event) {
-    event.preventDefault();
-    resetNoteForm();
-    sessionStorage.removeItem("login");
-    localStorage.removeItem("login");
-    showLoginPage();
-
-});
-
-
-//clear selection and form
-$(".add-new-note").click(function () {
-    resetNoteForm();
-});
-
-$("body").on("click", ".show-note", function (event) {
-    event.preventDefault();
-    selectedNote = this.note;
-    selectedLink = this;
-    $("#title").val(selectedNote.Title);
-    $("#content").val(selectedNote.Content);
-
-    $(".show-note").removeClass("active");
-    $(this).addClass("active");
-
-});
-
-
-$("#frmNote").submit(function (event) {
-    event.preventDefault();
-    if (selectedNote) {
-        updateNote();
-    }
-    else {
-        addNote();
-    }
-});
-
-// delete note
-$("#btnDelete").click(function () {
-    if (selectedNote) {
-        if (confirm("Are you sure to delete the selected note?")) {
-            ajax("api/Notes/Delete/" + selectedNote.Id, "DELETE", null,
-                function (data) {
-                    $(selectedLink).remove();
-                    resetNoteForm();
+    // if there is a token, this method checks if it is still valid
+    $scope.checkAuth = function () {
+        if ($scope.loginData()) {
+            $scope.ajax("api/Account/UserInfo", "get", null, true,
+                function (response) {
+                    if (response.data.Email != $scope.loginData().userName) {
+                        $scope.logout();
+                    }
                 },
-                function () {
+                function (response) {
+                    if (response.status == 401) {
+                        $scope.logout();
+                    }
+                });
+        }
+    };
+    //uygulamaya start veren metot
+    $scope.checkAuth();
+});
+
+app.controller("loginController", function ($scope, $timeout, $location, $httpParamSerializer) {
+    $scope.currentTab = "login";
+    $scope.messageFor = "register"; //login |  register
+    $scope.messageType = "info"; //success | warning | danger | info
+    $scope.messages = []; //string array ["mesaj1","mesaj2"]
+
+    $scope.registerForm = {
+        Email: "",
+        Password: "",
+        ConfirmPassword: ""
+    };
+
+    $scope.loginForm = {
+        grant_type: "password",
+        username: "",
+        password: ""
+    };
+
+    $scope.rememberMe = false;
+
+    $scope.error = function (data) {
+        $scope.messageFor = $scope.currentTab;
+        $scope.messageType = "danger";
+        $scope.messages = [];
+        if (data.ModelState) {
+
+            for (var prop in data.ModelState) {
+                for (var index in data.ModelState[prop]) {
+                    $scope.messages.push(data.ModelState[prop][index]);
+                }
+            }
+
+        }
+
+        if (data.error_description) {
+            $scope.messages.push(data.error_description);
+        }
+
+    };
+
+    $scope.success = function (message) {
+        $scope.messageFor = $scope.currentTab;
+        $scope.messageType = "success";
+        $scope.messages = [message];
+    };
+
+    $scope.resetRegisterForm = function () {
+        $scope.registerForm.Email = "";
+        $scope.registerForm.Password = "";
+        $scope.registerForm.ConfirmPassword = "";
+    };
+
+    $scope.resetLoginForm = function () {
+        $scope.loginForm.username = "";
+        $scope.loginForm.password = "";
+        $scope.rememberMe = false;
+    };
+
+    $scope.$watch("currentTab", function () {
+        $scope.resetLoginForm();
+        $scope.resetRegisterForm();
+        $scope.messages = [];
+
+    });
+
+    $scope.registerSubmit = function () {
+
+        $scope.ajax("api/Account/Register", "post", $scope.registerForm, false,
+            function (response) {
+                $scope.resetRegisterForm();
+                $scope.success("Your account has been successfully created.")
+            },
+            function (response) {
+                $scope.error(response.data);
+            }
+        );
+
+    };
+
+    $scope.loginSubmit = function () {
+        $scope.ajax("Token", "post", $httpParamSerializer($scope.loginForm), false,
+            function (response) {
+                localStorage.removeItem("login");
+                sessionStorage.removeItem("login");
+                var storage = $scope.rememberMe ? localStorage : sessionStorage;
+                storage["login"] = JSON.stringify(response.data);
+                $scope.resetLoginForm();
+                $scope.success("Your login is successful. Redirecting..");
+
+                $timeout(function () {
+                    $location.path("/");
+                }, 1000);
+            },
+            function (response) {
+                console.log(response);
+
+                $scope.error(response.data);
+            }
+        );
+
+    };
+
+});
+
+app.controller("appController", function ($scope) {
+    $scope.notes = [];
+    $scope.currentNote = null; //o an düzenlenen not
+    $scope.noteForm = {
+        Id: null,
+        Title: "",
+        Content: "",
+        CreationTime: "",
+        ModificationTime: ""
+    };
+
+    $scope.getNotes = function () {
+        $scope.ajax("api/Notes/List", "get", null, true,
+            function (response) {
+                $scope.notes = response.data;
+            },
+            function (response) {
+
+            }
+        );
+    };
+
+    $scope.showNote = function (event, note) {
+        if (event)
+            event.preventDefault();
+        $scope.currentNote = note;
+        $scope.noteForm = angular.copy(note);//save demeden değişikliği algılamasın diye copy kullandık
+    };
+
+    $scope.putNote = function () {
+        var data = {
+            Id: $scope.noteForm.Id,
+            Title: $scope.noteForm.Title,
+            Content: $scope.noteForm.Content,
+        };
+        $scope.ajax("api/Notes/Update/" + data.Id, "put", data, true,
+            function (response) {
+                $scope.update(response.data, $scope.currentNote);
+            },
+            function (response) {
+
+            }
+        );
+    };
+
+    $scope.postNote = function () {
+        var data = {
+            Title: $scope.noteForm.Title,
+            Content: $scope.noteForm.Content,
+        };
+        $scope.ajax("api/Notes/New", "post", data, true,
+            function (response) {
+                $scope.notes.push(response.data);
+                $scope.showNote(null, response.data);
+            },
+            function (response) {
+
+            }
+        );
+    };
+
+    $scope.submitNote = function () {
+        if ($scope.currentNote) {
+            $scope.putNote();
+        }
+        else {
+            $scope.postNote();
+
+        }
+    };
+
+    $scope.newNote = function () {
+        $scope.currentNote = null;
+        $scope.noteForm = {
+            Id: null,
+            Title: "",
+            Content: "",
+            CreationTime: "",
+            ModificationTime: ""
+        };
+        document.getElementById("title").focus();
+    };
+
+    $scope.deleteNote = function () {
+        if ($scope.currentNote) {
+
+            $scope.ajax("api/Notes/Delete", +$scope.currentNote.Id, "delete", null, true,
+                function (response) {
+                    for (var i = 0; i < $scope.notes.length; i++) {
+                        if ($scope.notes[i] == $scope.currentNote) {
+                            $scope.notes.splice(i, 1);
+                            $scope.newNote();
+                            return;
+                        }
+                    }
+                },
+                function (response) {
 
                 }
             );
         }
-    }
-    else {
-        if (confirm("Are you sure to delete the draft?")) {
-            resetNoteForm();
-        }
-    }
+     
+       
+    };
+
+//sayfaya start veren kısım
+$scope.getNotes();
+});
+
+//JQuery Dom Ready
+$(function () {
+    $(".navbar-login a").click(function (event) {
+        event.preventDefault();
+        var href = $(this).attr("href");
+        // https://getbootstrap.com/docs/4.0/components/navs/#via-javascript
+        $('#pills-tab a[href="' + href + '"]').tab('show'); // Select tab by name
+    });
+
+    $('body').on('click', '#pills-tab a', function (e) {
+        e.preventDefault()
+        $(this).tab('show')
+    });
+
+    // https://stackoverflow.com/questions/37769900/how-to-change-a-scope-variable-outside-the-controller-in-angularjs
+    // https://www.hiren.dev/2014/06/how-to-access-scope-variable-outside.html
+    $('body').on('shown.bs.tab', 'a[data-toggle="pill"]', function (e) {
+        var $scope = angular.element($('[ng-view]')[0]).scope();
+        $scope.currentTab = $(e.target).attr("id") == "pills-signup-tab" ? "register" : "login";
+
+        $scope.$apply();
+        //e.target // newly activated tab
+        //e.relatedTarget // previous active tab
+    });
 });
 
 
-// ACTIONS
-checkLogin();

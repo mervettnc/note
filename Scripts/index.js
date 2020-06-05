@@ -1,5 +1,5 @@
 ﻿// AngularJs Version
-var apiUrl = "http://mynoteapi.mervetutuncu.com/";
+var apiUrl = "https://mynoteapi.mervetutuncu.com/";
 var app = angular.module("myApp", ["ngRoute"]);
 
 app.directive("messages", function () {
